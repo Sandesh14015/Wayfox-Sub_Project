@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STT + LLM Pipeline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e6e6e6;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+    .card {
+      width: 100%;
+      max-width: 720px;
+      background: #171a23;
+      border: 1px solid #2a2f3a;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    h1 { font-size: 1.35rem; margin-bottom: 6px; }
+    p.sub { color: #9aa3b2; font-size: 0.9rem; margin-bottom: 20px; }
+    .chain {
+      font-size: 0.8rem;
+      color: #7dd3fc;
+      background: #0b1220;
+      border: 1px solid #1e3a5f;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 20px;
+      word-break: break-all;
+    }
+    label.drop {
+      display: block;
+      border: 2px dashed #3b4252;
+      border-radius: 10px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      color: #9aa3b2;
+      margin-bottom: 14px;
+      transition: border-color 0.15s;
+    }
+    label.drop:hover, label.drop.has-file { border-color: #38bdf8; color: #e6e6e6; }
+    #file { display: none; }
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { background: #334155; cursor: not-allowed; }
+    #status { margin-top: 14px; font-size: 0.9rem; color: #9aa3b2; min-height: 1.2em; }
+    #result {
+      margin-top: 18px;
+      background: #0b0d13;
+      border: 1px solid #2a2f3a;
+      border-radius: 8px;
+      padding: 16px;
+      white-space: pre-wrap;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      display: none;
+    }
+    #result.show { display: block; }
+    #result.null { color: #fbbf24; }
+    #result.err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>File → Text → LLM</h1>
+    <p class="sub">Upload audio / image / PDF / TXT / DOCX. One attempt per model, then fallback.</p>
+
+    <div class="chain">chain: {% for m in chain %}{{ m }}{% if not loop.last %} → {% endif %}{% endfor %}</div>
+
+    <label class="drop" id="drop" for="file">Click to choose a file</label>
+    <input type="file" id="file" />
+
+    <button id="go" disabled>Analyze</button>
+    <div id="status"></div>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("file");
+    const drop = document.getElementById("drop");
+    const go = document.getElementById("go");
+    const status = document.getElementById("status");
+    const result = document.getElementById("result");
+
+    fileInput.addEventListener("change", () => {
+      const f = fileInput.files[0];
+      drop.classList.toggle("has-file", !!f);
+      drop.textContent = f ? f.name : "Click to choose a file";
+      go.disabled = !f;
+    });
+
+    go.addEventListener("click", async () => {
+      const f = fileInput.files[0];
+      if (!f) return;
+      go.disabled = true;
+      status.textContent = "Processing… (transcribe / extract → LLM)";
+      result.className = "";
+      result.classList.remove("show");
+
+      const fd = new FormData();
+      fd.append("file", f);
+
+      try {
+        const res = await fetch("/analyze", { method: "POST", body: fd });
+        const data = await res.json();
+        result.classList.add("show");
+        if (data.error) {
+          result.classList.add("err");
+          result.textContent = data.error;
+          status.textContent = "Failed";
+        } else if (data.response === null) {
+          result.classList.add("null");
+          result.textContent = "null (no text found)";
+          status.textContent = "Done";
+        } else {
+          result.textContent = data.response;
+          status.textContent = "Done";
+        }
+      } catch (e) {
+        result.classList.add("show", "err");
+        result.textContent = String(e);
+        status.textContent = "Failed";
+      } finally {
+        go.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

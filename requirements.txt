@@ -1,0 +1,8 @@
+openai-whisper
+pytesseract
+Pillow
+pdfplumber
+python-docx
+python-dotenv
+litellm
+flask
